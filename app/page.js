@@ -35,7 +35,6 @@ import { AlignJustify, FileIcon, FileText, Info, MessageSquareText, Play, Repeat
 import { motion } from 'framer-motion';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API;
 
@@ -167,40 +166,24 @@ const RagNode = ({ id, data, selected, onDelete }) => {
     if (!file) return;
 
     data.onUpload(file.name, '');
-    const formData = new FormData();
-    formData.append('FILE', file);
 
     try {
 
-      const response = await axios.post('https://nextjs-pdf-parser1.vercel.app/api/parse-data', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data', // This is important for file uploads
-          'Access-Control-Allow-Origin': '*', // Allow requests from all origins
-          'Access-Control-Allow-Methods': 'POST', // Allow POST method
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization', // Allow headers
-        },
+      const formData = new FormData();
+      formData.append('FILE', file);
+
+      const response = await fetch('api/parse-data', {
+        method: 'POST',
+        body: formData,
       });
 
-      // Handling successful response
-      const text = response.data; // Assuming the response contains the parsed text
+      if (!response.ok) {
+        return toast.warn(`HTTP error! status: ${response.status}`);
+      }
+
+      const text = await response.text();
       data.onUpload(file.name, text);
       toast.success('PDF processed successfully');
-
-      // const formData = new FormData();
-      // formData.append('FILE', file);
-
-      // const response = await fetch('https://nextjs-pdf-parser1.vercel.app/api/parse-data', {
-      //   method: 'POST',
-      //   body: formData,
-      // });
-
-      // if (!response.ok) {
-      //   return toast.warn(`HTTP error! status: ${response.status}`);
-      // }
-
-      // const text = await response.text();
-      // data.onUpload(file.name, text);
-      // toast.success('PDF processed successfully');
     } catch (error) {
       console.error('Error processing PDF:', error);
       setError('Failed to extract text from PDF. Please try again.');
@@ -744,7 +727,7 @@ export default function Page() {
       <ConfirmationModal isOpen={showConfirmModal} onConfirm={modalConfig.onConfirm} onCancel={() => setShowConfirmModal(false)} title={modalConfig.title} message={modalConfig.message} />
 
       <div className={`grid ${sidebarOpen ? 'grid-cols-[500px_1fr]' : 'grid-cols-[0px_1fr]'} transition-all duration-300`}>
-        <div className={`h-screen bg-[#1e232d] text-white flex flex-col overflow-hidden ${sidebarOpen ? 'w-[500px]' : 'w-0'}`}>
+        <div className={`h-screen overflow-auto bg-[#1e232d] text-white flex flex-col   ${sidebarOpen ? 'w-[500px]' : 'w-0'}`}>
           <div className='p-4 space-y-6'>
             <div className='flex items-center justify-between px-4 text-2xl font-bold text-blue-500'>
               <div className='flex items-center gap-0 text-4xl'>

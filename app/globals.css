@@ -24,3 +24,8 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+.bg-white.border-t.p-2.text-sm.flex.items-center.justify-between{
+  display: none !important;
+}
