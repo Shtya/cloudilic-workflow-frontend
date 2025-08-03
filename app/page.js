@@ -1,7 +1,29 @@
 /* 
-  - the second point hande the x in the node if i need to cancel node
-    when click x on any card return this ( Uncaught TypeError: onDelete is not a function)
 
+Hi [Interviewer’s Name],
+I hope you're doing well! I wanted to share a link to my latest project with you. It’s a web application that combines React, Node.js, and OpenAI API to deliver an interactive experience. I’d love to hear your thoughts on it!
+Here are the details:
+
+🔗 Live Preview
+Frontend: https://dragify-workflow.vercel.app/
+Backend : https://cloudilic-workflow-backend.vercel.app
+
+💻 GitHub Repository: [GitHub Repo Link]
+Frontend: https://github.com/Shtya/cloudilic-workflow-frontend
+Backend : https://github.com/Shtya/cloudilic-workflow-backend
+
+🎥 Project Walkthrough Video: [Video Link]
+
+Feel free to explore the app, and don’t hesitate to reach out with any questions. Looking forward to hearing your feedback!
+
+Best regards,
+[Your Name]
+
+
+
+
+fav
+sidebar
 */
 'use client';
 
@@ -13,6 +35,7 @@ import { AlignJustify, FileIcon, FileText, Info, MessageSquareText, Play, Repeat
 import { motion } from 'framer-motion';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API;
 
@@ -144,23 +167,40 @@ const RagNode = ({ id, data, selected, onDelete }) => {
     if (!file) return;
 
     data.onUpload(file.name, '');
+    const formData = new FormData();
+    formData.append('FILE', file);
 
     try {
-      const formData = new FormData();
-      formData.append('FILE', file);
 
-      const response = await fetch('https://nextjs-pdf-parser1.vercel.app/api/parse-data', {
-        method: 'POST',
-        body: formData,
+      const response = await axios.post('https://nextjs-pdf-parser1.vercel.app/api/parse-data', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data', // This is important for file uploads
+          'Access-Control-Allow-Origin': '*', // Allow requests from all origins
+          'Access-Control-Allow-Methods': 'POST', // Allow POST method
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization', // Allow headers
+        },
       });
 
-      if (!response.ok) {
-        return toast.warn(`HTTP error! status: ${response.status}`);
-      }
-
-      const text = await response.text();
+      // Handling successful response
+      const text = response.data; // Assuming the response contains the parsed text
       data.onUpload(file.name, text);
       toast.success('PDF processed successfully');
+
+      // const formData = new FormData();
+      // formData.append('FILE', file);
+
+      // const response = await fetch('https://nextjs-pdf-parser1.vercel.app/api/parse-data', {
+      //   method: 'POST',
+      //   body: formData,
+      // });
+
+      // if (!response.ok) {
+      //   return toast.warn(`HTTP error! status: ${response.status}`);
+      // }
+
+      // const text = await response.text();
+      // data.onUpload(file.name, text);
+      // toast.success('PDF processed successfully');
     } catch (error) {
       console.error('Error processing PDF:', error);
       setError('Failed to extract text from PDF. Please try again.');
