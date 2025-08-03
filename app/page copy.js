@@ -1,10 +1,8 @@
-/* 
-
-  - the second point hande the x in the node if i need to cancel node
-    when click x on any card return this ( Uncaught TypeError: onDelete is not a function)
-  
-  - handle show the text in popup not like this handle it more that this 
-*/
+// handle here the cancel the node button x when click on it delete this node
+// write on every Head this should like with what ( input , output) like this 
+// show the msgs errro on react-toast not throw new error 
+// and don't user ( confirm , alert) make custom modal and use it in the all cases
+// the parse of the pdf is not working check form it
 
 
 'use client';
@@ -13,48 +11,34 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, { Handle, Position, addEdge, Background, Controls, useNodesState, useEdgesState, MarkerType } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useDropzone } from 'react-dropzone';
-import { AlignJustify, FileIcon, Play, Repeat, RotateCcw, Save, Share2, UploadIcon, X } from 'lucide-react';
+// import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
+import { AlignJustify, FileText, Info, MessageSquareText, Play, Repeat, RotateCcw, Save, Settings, Share2, UserRound, X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css'; 
+import * as pdfjsLib from 'pdfjs-dist';
 
-const ConfirmationModal = ({ isOpen, onConfirm, onCancel, title, message }) => {
-  if (!isOpen) return null;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-  return (
-    <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
-      <div className='bg-white p-6 rounded-lg shadow-lg max-w-md w-full'>
-        <h3 className='text-lg font-medium mb-2'>{title}</h3>
-        <p className='text-gray-600 mb-4'>{message}</p>
-        <div className='flex justify-end gap-2'>
-          <button onClick={onCancel} className='px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded'>
-            Cancel
-          </button>
-          <button onClick={onConfirm} className='px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded'>
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Custom node types with better styling
+const InputNode = ({ id, data, selected }) => {
+  // You'll need to pass the onDelete function from the parent component
+  const onDelete = data.onDelete || (() => {});
 
-const InputNode = ({ id, data, selected, onDelete }) => {
   return (
     <div className={`bg-white rounded-lg overflow-hidden shadow-md w-64 border-sm border-blue-100 ${selected ? 'ring-1 ring-blue-400' : ''}`}>
       <div className='relative font-normal text-sm px-2 py-1 bg-[#cde1fa] text-black/80 flex items-center gap-2'>
-        <img src='/download.png' className='w-[16px] h-[16px]' alt='Input' />
+        <img src='/download.png' className='w-[16px] h-[16px]' />
         <span className='font-medium'>Input</span>
         <button
           onClick={e => {
-            e.stopPropagation();
+            e.stopPropagation(); 
             onDelete(id);
           }}
-          className='absolute right-1 top-1/2 -translate-y-1/2 p-0.5 cursor-pointer hover:text-red-500 text-gray-900'>
+          className='absolute right-1 top-1/2 -translate-y-1/2 p-0.5  cursor-pointer hover:text-red-500 text-gray-900 '>
           <X size={14} />
         </button>
       </div>
       <textarea value={data.question || ''} onChange={e => data.onChange(e.target.value)} placeholder='What is this PDF about?' className='bg-[#f5f5f5] outline-none border border-gray-200 w-[calc(100%-10px)] ml-[5px] mt-[5px] p-2 rounded text-xs min-h-[10px] focus:outline-none focus:ring-2 focus:ring-blue-200' />
+      {/* Add source handle (output) */}
       <Handle
         type='source'
         position={Position.Bottom}
@@ -72,126 +56,76 @@ const InputNode = ({ id, data, selected, onDelete }) => {
   );
 };
 
-const RagNode = ({ id, data, selected, onDelete }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleFileUpload = async file => {
-    setIsLoading(true);
-    setError('');
-
-    if (!file) return;
-
-    data.onUpload(file.name, '');
-
-    try {
-      const formData = new FormData();
-      formData.append('FILE', file);
-
-      const response = await fetch('https://nextjs-pdf-parser1.vercel.app/api/parse-data', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        return toast.warn(`HTTP error! status: ${response.status}`);
-      }
-
-      const text = await response.text();
-      data.onUpload(file.name, text);
-      toast.success('PDF processed successfully');
-    } catch (error) {
-      console.error('Error processing PDF:', error);
-      setError('Failed to extract text from PDF. Please try again.');
-      toast.error('Failed to process PDF');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+const RagNode = ({ id, data, selected }) => {
+  const [status, setStatus] = useState('');
 
   const onDrop = useCallback(
     async acceptedFiles => {
       if (!acceptedFiles || acceptedFiles.length === 0) return;
-      await handleFileUpload(acceptedFiles[0]);
+      const file = acceptedFiles[0];
+      data.onUpload(file.name, '');
+      setStatus(`Extracting text from ${file.name}...`);
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const strings = content.items.map(it => it.str);
+          fullText += strings.join(' ') + '\n\n';
+        }
+        data.onUpload(file.name, fullText);
+        setStatus(`Loaded PDF: ${file.name}`);
+      } catch (e) {
+        console.error('PDF parse error', e);
+        setStatus('Failed to extract PDF text');
+      }
     },
     [data],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'application/pdf': ['.pdf'],
-    },
+    accept: { 'application/pdf': ['.pdf'] },
     onDrop,
     multiple: false,
-    maxSize: 10 * 1024 * 1024,
-    disabled: isLoading,
   });
 
-  const [showText, setShowText] = useState(false);
-
   return (
+    // <div className='bg-white p-4 rounded-lg shadow-md w-64 border border-purple-100'>
     <div className={`bg-white rounded-lg overflow-hidden shadow-md w-64 border-sm border-blue-100 ${selected ? 'ring-1 ring-blue-400' : ''}`}>
       <div className='relative font-normal text-sm px-2 py-1 bg-[#cde1fa] text-black/80 flex items-center gap-2'>
-        <img src='/file.png' className='w-[16px] h-[16px]' alt='RAG' />
-        <span className='font-medium'>RAG</span>
-        {data.pdfText && (
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              setShowText(!showText);
-            }}
-            className='ml-auto p-1 text-xs bg-blue-100 hover:bg-blue-200 rounded'>
-            {showText ? 'Hide Text' : 'Show Text'}
-          </button>
-        )}
+        <img src='/folder (1).png' className='w-[16px] h-[16px]' />
+        <span className='font-medium'>RAG/Multi Rag</span>
         <button
           onClick={e => {
-            e.stopPropagation();
+            e.stopPropagation(); // Prevent node selection when clicking delete
             onDelete(id);
           }}
-          className='p-0.5 cursor-pointer hover:text-red-500 text-gray-900'>
+          className='absolute right-1 top-1/2 -translate-y-1/2 p-0.5  cursor-pointer hover:text-red-500 text-gray-900 '>
           <X size={14} />
         </button>
       </div>
 
-      <div {...getRootProps()} className={`m-1 p-4 border-2 border-dashed rounded-md text-center cursor-pointer ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'} ${isLoading ? 'pointer-events-none opacity-70' : ''}`}>
-        <input {...getInputProps()} />
-        {isLoading ? (
-          <div className='flex flex-col items-center justify-center'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2'></div>
-            <p className='text-sm text-gray-600'>Processing PDF...</p>
-          </div>
-        ) : (
-          <>
-            <div className='flex flex-col items-center justify-center'>
-              <UploadIcon className='w-6 h-6 text-gray-500 mb-2' />
-              <p className='text-sm text-gray-700'>{isDragActive ? 'Drop PDF here' : 'Drag & drop PDF or click to browse'}</p>
-              <p className='text-xs text-gray-500 mt-1'>(Max 10MB)</p>
-            </div>
-          </>
-        )}
-      </div>
-
-      {data.fileName && (
-        <div className='m-1 p-2 bg-gray-100 rounded-md text-xs flex items-center'>
-          <FileIcon className='w-4 h-4 mr-2 text-gray-600' />
-          <span className='truncate'>{data.fileName}</span>
-        </div>
-      )}
-
-      {showText && data.pdfText && (
-        <div className='m-1 p-2 bg-gray-50 border rounded-md max-h-40 overflow-auto text-xs'>
-          <pre className='whitespace-pre-wrap'>{data.pdfText}</pre>
-        </div>
-      )}
-
-      {error && <div className='m-1 p-2 bg-red-50 text-red-600 text-xs rounded-md'>{error}</div>}
+      <Handle
+        type='target'
+        position={Position.Left}
+        style={{
+          transform: 'translateX(-3px)',
+          width: '12px',
+          height: '12px',
+          backgroundColor: '#fff',
+          borderRadius: '50%',
+          border: '2px solid #aaa',
+          boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
+        }}
+      />
 
       <Handle
         type='source'
-        position={Position.Bottom}
+        position={Position.Right}
         style={{
-          transform: 'translateY(1px)',
+          transform: 'translateX(3px)',
           width: '12px',
           height: '12px',
           backgroundColor: '#fff',
@@ -200,44 +134,53 @@ const RagNode = ({ id, data, selected, onDelete }) => {
           boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
         }}
       />
-      <Handle
-        type='target'
-        position={Position.Top}
-        style={{
-          transform: 'translateY(-2px)',
-          width: '12px',
-          height: '12px',
-          backgroundColor: '#fff',
-          borderRadius: '50%',
-          border: '2px solid #aaa',
-          boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.1)',
-        }}
-      />
+
+      <div {...getRootProps()} className={` w-[calc(100%-10px)] ml-[5px] my-[5px] border-2 border-dashed p-4 rounded-lg cursor-pointer text-sm max-h-[50px] bg-gray-100 flex flex-col justify-center items-center transition-colors ${isDragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-300'}`}>
+        <input {...getInputProps()} />
+        {isDragActive ? (
+          <div className='text-purple-600 font-medium'>Drop PDF here...</div>
+        ) : (
+          <div className="flex items-center gap-2 " >
+            <img src="/cloud-computing.png" className=" opacity-50 w-8 h-fit  " />
+            <div className='text-xs text-gray-500 mt-1 '>Click to upload</div>
+          </div>
+        )}
+      </div>
+      {data.fileName && (
+        <div className='mt-3 text-xs w-[calc(100%-10px)] ml-[5px] my-[5px] '>
+          <div className='font-medium text-gray-600'>Docs: <span className="opacity-50 !text-[10px] " > ( 1000MB limit per file) </span> </div>
+          <div className='truncate px-2 py-1 text-xs bg-green-100 opacity-80 rounded flex items-center gap-2 mt-1'>
+            {data.fileName}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
-const OutputNode = ({ id, data, selected, onDelete }) => {
+const OutputNode = ({ id, data , selected }) => {
   return (
     <div className={`bg-white rounded-lg overflow-hidden shadow-md w-64 border-sm border-blue-100 ${selected ? 'ring-1 ring-blue-400' : ''}`}>
       <div className='relative font-normal text-sm px-2 py-1 bg-[#cde1fa] text-black/80 flex items-center gap-2'>
-        <img src='/download.png' className='rotate-180 w-[16px] h-[16px]' alt='Output' />
+        <img src='/download.png' className=' rotate-180 w-[16px] h-[16px]' />
         <span className='font-medium'>Output</span>
         <button
           onClick={e => {
-            e.stopPropagation();
+            e.stopPropagation(); 
             onDelete(id);
           }}
-          className='absolute right-1 top-1/2 -translate-y-1/2 p-0.5 cursor-pointer hover:text-red-500 text-gray-900'>
+          className='absolute right-1 top-1/2 -translate-y-1/2 p-0.5  cursor-pointer hover:text-red-500 text-gray-900 '>
           <X size={14} />
         </button>
       </div>
-      <div className='text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded max-h-[250px] overflow-auto'>{data.output || <div className='text-gray-400 italic'>AI response will appear here after running the workflow...</div>}</div>
+      <textarea value={data.question || ''} onChange={e => data.onChange(e.target.value)} placeholder='What is this PDF about?' className='bg-[#f5f5f5] outline-none border border-gray-200 w-[calc(100%-10px)] ml-[5px] mt-[5px] p-2 rounded text-xs min-h-[10px] focus:outline-none focus:ring-2 focus:ring-blue-200' />
+      {/* Add source handle (output) */}
       <Handle
         type='target'
-        position={Position.Top}
+        position={Position.Bottom}
         style={{
-          transform: 'translateY(-2px)',
+          transform: 'translateY(2px)',
           width: '12px',
           height: '12px',
           backgroundColor: '#fff',
@@ -257,42 +200,18 @@ const nodeTypes = {
 };
 
 export default function Page() {
+  // Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [running, setRunning] = useState(false);
   const [loop, setLoop] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [modalConfig, setModalConfig] = useState({
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
   const loopRef = useRef(null);
-  const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+  const [apiKey, setApiKey] = useState('');
   const [status, setStatus] = useState('');
   const [activeMenu, setActiveMenu] = useState('fetch-data');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const showConfirmation = (title, message, onConfirm) => {
-    setModalConfig({
-      title,
-      message,
-      onConfirm: () => {
-        onConfirm();
-        setShowConfirmModal(false);
-      },
-    });
-    setShowConfirmModal(true);
-  };
-
-  const deleteNode = id => {
-    showConfirmation('Delete Node', 'Are you sure you want to delete this node?', () => {
-      setNodes(nds => nds.filter(node => node.id !== id));
-      setEdges(eds => eds.filter(edge => edge.source !== id && edge.target !== id));
-      toast.success('Node deleted successfully');
-    });
-  };
-
+  // Helper to update node data
   const updateNodeData = (id, newData) => {
     setNodes(nds =>
       nds.map(n => {
@@ -304,7 +223,6 @@ export default function Page() {
               ...newData,
               onChange: n.type === 'inputNode' ? v => updateNodeData(id, { question: v }) : n.data?.onChange,
               onUpload: n.type === 'ragNode' ? (name, text) => updateNodeData(id, { fileName: name, pdfText: text }) : n.data?.onUpload,
-              onDelete: deleteNode,
             },
           };
         }
@@ -313,26 +231,41 @@ export default function Page() {
     );
   };
 
+  // Attach missing handlers after loading from storage
   const attachHandlers = loadedNodes => {
     return loadedNodes.map(n => {
-      const node = {
-        ...n,
-        data: {
-          ...n.data,
-          onDelete: deleteNode,
-        },
-      };
-
       if (n.type === 'inputNode') {
-        node.data.onChange = v => updateNodeData(n.id, { question: v });
-      } else if (n.type === 'ragNode') {
-        node.data.onUpload = (name, text) => updateNodeData(n.id, { fileName: name, pdfText: text });
+        return {
+          ...n,
+          data: {
+            question: n.data?.question || '',
+            onChange: v => updateNodeData(n.id, { question: v }),
+          },
+        };
       }
-
-      return node;
+      if (n.type === 'ragNode') {
+        return {
+          ...n,
+          data: {
+            fileName: n.data?.fileName || '',
+            pdfText: n.data?.pdfText || '',
+            onUpload: (name, text) => updateNodeData(n.id, { fileName: name, pdfText: text }),
+          },
+        };
+      }
+      if (n.type === 'outputNode') {
+        return {
+          ...n,
+          data: {
+            output: n.data?.output || '',
+          },
+        };
+      }
+      return n;
     });
   };
 
+  // Load from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('cloudilic_flow');
@@ -344,11 +277,11 @@ export default function Page() {
       }
     } catch (e) {
       console.warn('Failed to load saved flow', e);
-      toast.error('Failed to load saved workflow');
     }
     return () => clearInterval(loopRef.current);
   }, []);
 
+  // Loop runner
   useEffect(() => {
     if (loop) {
       loopRef.current = setInterval(() => {
@@ -360,6 +293,7 @@ export default function Page() {
     return () => clearInterval(loopRef.current);
   }, [loop, nodes, apiKey]);
 
+  // Connect handler
   const onConnect = useCallback(
     params =>
       setEdges(eds =>
@@ -381,32 +315,28 @@ export default function Page() {
     [],
   );
 
+  // Add new node
   const addNode = type => {
     const base = {
       id: `${type}-${Math.random().toString(36).substring(2, 7)}`,
       type,
-      position: { x: 250 + Math.random() * 100, y: 100 + Math.random() * 100 },
-      data: {
-        onDelete: deleteNode,
-      },
+      position: { x: 250, y: 100 + nodes.length * 80 },
+      data: {},
     };
 
     if (type === 'inputNode') {
       base.data = {
-        ...base.data,
         question: '',
         onChange: v => updateNodeData(base.id, { question: v }),
       };
     } else if (type === 'ragNode') {
       base.data = {
-        ...base.data,
         fileName: '',
         pdfText: '',
         onUpload: (name, text) => updateNodeData(base.id, { fileName: name, pdfText: text }),
       };
     } else if (type === 'outputNode') {
       base.data = {
-        ...base.data,
         output: '',
       };
     }
@@ -414,102 +344,92 @@ export default function Page() {
     setNodes(nds => nds.concat(base));
   };
 
+  // Run the workflow
   const runWorkflow = async () => {
     if (running) return;
     setRunning(true);
     setStatus('Running workflow...');
 
     try {
-      // Find all connected node chains
-      const inputNodes = nodes.filter(n => n.type === 'inputNode');
-      const ragNodes = nodes.filter(n => n.type === 'ragNode');
-      const outputNodes = nodes.filter(n => n.type === 'outputNode');
+      const inputNode = nodes.find(n => n.type === 'inputNode');
+      const ragNode = nodes.find(n => n.type === 'ragNode');
+      const outputNode = nodes.find(n => n.type === 'outputNode');
 
-      if (inputNodes.length === 0 || ragNodes.length === 0 || outputNodes.length === 0) {
-        return toast.warn('You need at least one Input, RAG and Output node connected.');
+      // Validate nodes
+      if (!inputNode || !ragNode || !outputNode) {
+        throw new Error('You need Input, RAG and Output nodes connected.');
       }
 
-      // Process each connected chain
-      for (const outputNode of outputNodes) {
-        // Find connected RAG nodes for this output
-        const connectedRagEdges = edges.filter(e => e.target === outputNode.id);
-        const connectedRagNodes = ragNodes.filter(r => connectedRagEdges.some(e => e.source === r.id));
+      const question = inputNode.data?.question?.trim() || '';
+      const pdfContent = ragNode.data?.pdfText?.trim() || '';
 
-        for (const ragNode of connectedRagNodes) {
-          // Find connected input nodes for this RAG node
-          const connectedInputEdges = edges.filter(e => e.target === ragNode.id);
-          const connectedInputNodes = inputNodes.filter(i => connectedInputEdges.some(e => e.source === i.id));
-
-          for (const inputNode of connectedInputNodes) {
-            const question = inputNode.data?.question?.trim() || '';
-            const pdfContent = ragNode.data?.pdfText?.trim() || '';
-
-            if (!question) {
-              toast.warn(`Input node ${inputNode.id} has no question.`);
-              continue;
-            }
-            if (!pdfContent) {
-              toast.warn(`RAG node ${ragNode.id} has no PDF content.`);
-              continue;
-            }
-
-            let useContent = pdfContent;
-            if (useContent.length > 7000) {
-              useContent = useContent.slice(0, 7000) + '\n\n[Truncated]';
-              toast.warn(`PDF content in RAG node ${ragNode.id} was truncated to fit token limits`);
-            }
-
-            const prompt = `You are a helpful assistant. Given the following PDF content, please answer the question concisely and accurately."\n Question: ${question} \n PDF Content:\n${useContent} \nAnswer:`;
-
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                model: 'openai/gpt-3.5-turbo',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 1.0,
-                max_tokens: 100,
-              }),
-            });
-
-            if (!response.ok) {
-              toast.warn(`Failed to get response from OpenAI for node chain ${inputNode.id} → ${ragNode.id} → ${outputNode.id}`);
-              continue;
-            }
-
-            const data = await response.json();
-            const answer = data?.choices?.[0]?.message?.content || 'No answer returned from AI.';
-
-            // Update the output node with all responses
-            updateNodeData(outputNode.id, { 
-              output: (outputNode.data?.output || '') + 
-                `\n\n--- Response for "${question}" ---\n${answer}`
-            });
-          }
-        }
+      // Validate inputs
+      if (!question) {
+        throw new Error('Please enter a question in the Input node.');
+      }
+      if (!pdfContent) {
+        throw new Error('Please upload and wait for PDF text extraction in RAG node.');
+      }
+      if (!apiKey.trim()) {
+        throw new Error('Please provide your OpenAI API Key in the top bar.');
       }
 
+      // Prepare the prompt
+      let useContent = pdfContent;
+      if (useContent.length > 7000) {
+        useContent = useContent.slice(0, 7000) + '\n\n[Truncated]';
+      }
+
+      const prompt = `You are a helpful assistant. Given the following PDF content, please answer the question concisely and accurately. If the answer cannot be found in the content, say "The answer is not available in the provided document."
+
+PDF Content:
+${useContent}
+
+Question: ${question}
+
+Answer:`;
+
+      // Call OpenAI API
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to get response from OpenAI');
+      }
+
+      const data = await response.json();
+      const answer = data?.choices?.[0]?.message?.content || 'No answer returned from AI.';
+
+      // Update output node
+      updateNodeData(outputNode.id, { output: answer });
       setStatus('Workflow completed successfully.');
-      toast.success('Workflow completed successfully');
     } catch (error) {
       console.error('Workflow error:', error);
       setStatus(`Error: ${error.message}`);
-      toast.error(error.message);
     } finally {
       setRunning(false);
     }
   };
 
+  // Save workflow to localStorage
   const saveFlow = () => {
     try {
       const sanitizedNodes = nodes.map(n => {
         const d = { ...(n.data || {}) };
         delete d.onChange;
         delete d.onUpload;
-        delete d.onDelete;
         return { ...n, data: d };
       });
 
@@ -522,22 +442,20 @@ export default function Page() {
         }),
       );
 
-      toast.success('Workflow saved successfully');
+      setStatus('Workflow saved successfully.');
     } catch (e) {
       console.error('Save error:', e);
       setStatus('Failed to save workflow.');
-      toast.error('Failed to save workflow');
     }
   };
 
   const resetFlow = () => {
-    showConfirmation('Reset Workflow', 'Are you sure you want to reset the workflow? This cannot be undone.', () => {
+    if (confirm('Are you sure you want to reset the workflow? This cannot be undone.')) {
       setNodes([]);
       setEdges([]);
       localStorage.removeItem('cloudilic_flow');
       setStatus('Workflow reset.');
-      toast.success('Workflow reset successfully');
-    });
+    }
   };
 
   const exportFlow = () => {
@@ -546,7 +464,6 @@ export default function Page() {
         const d = { ...(n.data || {}) };
         delete d.onChange;
         delete d.onUpload;
-        delete d.onDelete;
         return { ...n, data: d };
       });
 
@@ -576,11 +493,9 @@ export default function Page() {
       URL.revokeObjectURL(url);
 
       setStatus('Workflow exported successfully.');
-      toast.success('Workflow exported successfully');
     } catch (e) {
       console.error('Export error:', e);
       setStatus('Failed to export workflow.');
-      toast.error('Failed to export workflow');
     }
   };
 
@@ -621,21 +536,23 @@ export default function Page() {
 
   return (
     <div className='h-screen text-black flex flex-col bg-gray-50'>
-      <ConfirmationModal isOpen={showConfirmModal} onConfirm={modalConfig.onConfirm} onCancel={() => setShowConfirmModal(false)} title={modalConfig.title} message={modalConfig.message} />
-
+      {/* Top bar */}
       <div className={`grid ${sidebarOpen ? 'grid-cols-[280px_1fr]' : 'grid-cols-[0px_1fr]'} transition-all duration-300`}>
+        {/* Sidebar */}
         <div className={`h-screen bg-[#1e232d] text-white flex flex-col overflow-hidden ${sidebarOpen ? 'w-[280px]' : 'w-0'}`}>
           <div className='p-4 space-y-6'>
+            {/* Logo */}
             <div className='flex items-center justify-between'>
               <div className='flex items-center gap-2 text-2xl font-bold'>
-                <span className='text-[#1691f1]'>Cloud</span>
-                <span className='text-[#eb9c1c]'>ilic</span>
+                <span className='text-[#1691f1]'>Dragi</span>
+                <span className='text-[#eb9c1c]'>fy</span>
               </div>
               <button onClick={toggleSidebar} className='p-1 rounded hover:bg-gray-700 transition-colors'>
                 <AlignJustify size={20} />
               </button>
             </div>
 
+            {/* Search */}
             <div className='relative'>
               <input type='text' placeholder='Search blocks...' className='w-full p-2 pl-8 bg-gray-800 text-white rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500' />
               <svg className='absolute left-2 top-2.5 text-gray-400 h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
@@ -643,6 +560,7 @@ export default function Page() {
               </svg>
             </div>
 
+            {/* Node Palette */}
             <div className='space-y-2'>
               <h3 className='text-sm font-semibold text-gray-400 uppercase tracking-wider'>Workflow Nodes</h3>
               <div className='space-y-2'>
@@ -669,6 +587,7 @@ export default function Page() {
               </div>
             </div>
 
+            {/* Menu Sections */}
             <div className='space-y-4'>
               {menuItems.map(item => (
                 <div key={item.id} className='space-y-1'>
@@ -707,7 +626,9 @@ export default function Page() {
           </div>
         </div>
 
+        {/* Main content */}
         <div className='flex flex-col h-screen'>
+          {/* Toolbar */}
           <div className='bg-white border-b flex items-center justify-between p-3'>
             <div className='flex items-center gap-4'>
               <button onClick={toggleSidebar} className='p-1 rounded hover:bg-gray-100'>
@@ -717,6 +638,13 @@ export default function Page() {
             </div>
 
             <div className='flex items-center gap-4'>
+              <div className='relative'>
+                <input type='password' value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder='OpenAI API Key' className='border rounded p-1.5 text-sm pl-8 pr-4 focus:outline-none focus:ring-1 focus:ring-blue-500' />
+                <svg className='absolute left-2 top-2.5 text-gray-400 h-4 w-4' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                  <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' />
+                </svg>
+              </div>
+
               <div className='flex items-center gap-2'>
                 <button onClick={runWorkflow} disabled={running} className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm ${running ? 'bg-blue-300' : 'bg-blue-500 hover:bg-blue-600'} text-white transition-colors`}>
                   <Play size={16} />
@@ -755,6 +683,7 @@ export default function Page() {
             </div>
           </div>
 
+          {/* Canvas */}
           <div className='flex-1 relative bg-gray-50'>
             <ReactFlow
               nodes={nodes}
@@ -790,7 +719,7 @@ export default function Page() {
             {nodes.length === 0 && (
               <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
                 <div className='text-center p-6 bg-white bg-opacity-80 rounded-lg shadow-sm max-w-md'>
-                  <h3 className='text-lg font-medium mb-2'>Welcome to Cloudilic</h3>
+                  <h3 className='text-lg font-medium mb-2'>Welcome to Dragify</h3>
                   <p className='text-gray-600 mb-4'>Drag nodes from the sidebar to start building your workflow. Connect Input → RAG → Output nodes to process PDFs with AI.</p>
                   <div className='flex justify-center gap-2'>
                     <div className='p-2 bg-blue-50 rounded text-blue-600 text-sm'>Input → Question</div>
@@ -802,14 +731,13 @@ export default function Page() {
             )}
           </div>
 
+          {/* Status bar */}
           <div className='bg-white border-t p-2 text-sm flex items-center justify-between'>
             <div className='text-gray-600'>{status || <span>Ready. {nodes.length > 0 ? `${nodes.length} node${nodes.length !== 1 ? 's' : ''} in workflow` : 'No nodes added yet'}</span>}</div>
             <div className='text-gray-500 text-xs'>{apiKey ? <span className='text-green-600'>OpenAI API Key: •••••••••</span> : <span className='text-red-500'>Please add OpenAI API Key to run workflow</span>}</div>
           </div>
         </div>
       </div>
-
-      <ToastContainer />
     </div>
   );
 }
